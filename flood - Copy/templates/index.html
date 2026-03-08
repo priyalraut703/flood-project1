@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Urban Flood Intelligence Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="scanline-overlay"></div>
+<div class="noise-overlay"></div>
+
+<!-- HEADER -->
+<header class="top-bar">
+  <div class="top-bar-left">
+    <div class="logo-mark">
+      <span class="logo-icon">⬡</span>
+      <div>
+        <div class="logo-title">URBAN FLOOD INTELLIGENCE</div>
+        <div class="logo-sub">PLATFORM v2.4 · MUNICIPAL EMERGENCY SYSTEMS</div>
+      </div>
+    </div>
+  </div>
+  <div class="top-bar-center">
+    <div class="status-strip">
+      <span class="status-dot blink"></span>
+      <span id="systemStatus">SYSTEM ONLINE — AWAITING DATA</span>
+    </div>
+  </div>
+  <div class="top-bar-right">
+    <div class="clock-display" id="clockDisplay">--:--:--</div>
+    <div class="top-bar-meta">MUMBAI METRO · ZONE B</div>
+  </div>
+</header>
+
+<!-- TABS -->
+<div class="tabs-container">
+  <div class="tabs-header">
+    <button class="tab-btn active" onclick="switchTab('map')" id="tab-map">
+      <span class="tab-icon">◈</span> MAP & CONTROLS
+    </button>
+    <button class="tab-btn" onclick="switchTab('wards')" id="tab-wards">
+      <span class="tab-icon">◈</span> WARD ANALYSIS
+    </button>
+    <button class="tab-btn" onclick="switchTab('analytics')" id="tab-analytics">
+      <span class="tab-icon">◈</span> ANALYTICS
+    </button>
+    <button class="tab-btn" onclick="switchTab('twin')" id="tab-twin">
+      <span class="tab-icon">⬡</span> DIGITAL TWIN
+    </button>
+  </div>
+</div>
+
+<!-- TAB CONTENT -->
+<div class="tab-content">
+
+  <!-- MAP & CONTROLS TAB -->
+  <div id="tab-content-map" class="tab-pane active">
+    <div class="main-layout">
+      <!-- LEFT PANEL -->
+      <aside class="panel left-panel">
+        <div class="panel-header">
+          <span class="panel-icon">◈</span> RAINFALL CONTROL
+        </div>
+
+        <div class="control-section">
+          <label class="ctrl-label">SIMULATION MODE</label>
+          <div class="mode-toggle">
+            <button class="mode-btn active" id="btnSlider" onclick="setMode('slider')">SLIDER</button>
+            <button class="mode-btn" id="btnUpload" onclick="setMode('upload')">CSV UPLOAD</button>
+          </div>
+        </div>
+
+        <div id="sliderSection" class="control-section">
+          <label class="ctrl-label">RAINFALL INTENSITY</label>
+          <div class="slider-value-display">
+            <span id="rainfallValue">150</span>
+            <span class="unit">mm</span>
+          </div>
+          <input type="range" id="rainfallSlider" min="50" max="300" value="150" class="rain-slider" oninput="updateSliderDisplay(this.value)">
+          <div class="slider-labels"><span>50mm</span><span>MODERATE</span><span>300mm</span></div>
+          <div class="rainfall-gauge" id="rainfallGauge">
+            <div class="gauge-fill" id="gaugeFill" style="width:33%"></div>
+          </div>
+        </div>
+
+        <div id="uploadSection" class="control-section hidden">
+          <label class="ctrl-label">UPLOAD CSV DATA</label>
+          <div class="file-drop" id="fileDrop">
+            <div class="file-drop-icon">⬆</div>
+            <div>DROP FILE OR CLICK</div>
+            <div class="file-drop-sub">Ward,Rainfall_mm,Elevation_m,Drainage_Capacity</div>
+            <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="handleFileSelect(this)">
+          </div>
+          <div id="fileNameDisplay" class="file-name-display"></div>
+        </div>
+
+        <button class="run-btn" onclick="runAnalysis()">
+          <span class="run-icon">▶</span> RUN FLOOD ANALYSIS
+        </button>
+
+        <div class="control-section">
+          <label class="ctrl-label">DIGITAL TWIN SIMULATION</label>
+          <button class="sim-btn" onclick="runDigitalTwin()">
+            <span>⬡</span> SIMULATE FLOOD TIMELINE
+          </button>
+          <div id="twinStatus" class="twin-status"></div>
+        </div>
+
+        <div class="control-section">
+          <label class="ctrl-label">LAYER CONTROLS</label>
+          <div class="layer-toggles">
+            <label class="toggle-row"><input type="checkbox" checked onchange="toggleLayer('risk')"> Risk Markers</label>
+            <label class="toggle-row"><input type="checkbox" checked onchange="toggleLayer('drain')"> Drain Failures</label>
+            <label class="toggle-row"><input type="checkbox" id="twinLayerToggle" onchange="toggleLayer('twin')"> Twin Flood Zone</label>
+          </div>
+        </div>
+
+        <div class="legend-box">
+          <div class="legend-title">RISK LEGEND</div>
+          <div class="legend-row"><span class="legend-dot high"></span> HIGH RISK (Score ≥ 90)</div>
+          <div class="legend-row"><span class="legend-dot med"></span> MEDIUM (Score ≥ 60)</div>
+          <div class="legend-row"><span class="legend-dot low"></span> LOW RISK (Score < 60)</div>
+          <div class="legend-row"><span class="legend-drain">⚠</span> DRAIN FAILURE</div>
+        </div>
+      </aside>
+
+      <!-- CENTER MAP -->
+      <main class="panel map-panel">
+        <div class="panel-header">
+          <span class="panel-icon">◈</span> FLOOD HOTSPOT MAP
+          <span class="map-coords" id="mapCoords">19.0760°N 72.8777°E</span>
+        </div>
+        <div id="floodMap"></div>
+        <div class="map-overlay-stats" id="mapStats" style="display:none">
+          <div class="mos-item"><span class="mos-val" id="moHigh">—</span><span class="mos-label">HIGH</span></div>
+          <div class="mos-sep">|</div>
+          <div class="mos-item"><span class="mos-val" id="moMed">—</span><span class="mos-label">MED</span></div>
+          <div class="mos-sep">|</div>
+          <div class="mos-item"><span class="mos-val" id="moLow">—</span><span class="mos-label">LOW</span></div>
+          <div class="mos-sep">|</div>
+          <div class="mos-item"><span class="mos-val" id="moDrain">—</span><span class="mos-label">DRAINS</span></div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- WARD ANALYSIS TAB -->
+  <div id="tab-content-wards" class="tab-pane">
+    <div class="wards-layout">
+      <div class="wards-main">
+        <div class="panel-header">
+          <span class="panel-icon">◈</span> WARD READINESS
+        </div>
+        <div id="wardReadiness" class="ward-list">
+          <div class="empty-state">Run analysis to view ward readiness scores</div>
+        </div>
+      </div>
+
+      <div class="wards-sidebar">
+        <div class="panel-header" style="margin-bottom:16px">
+          <span class="panel-icon">◈</span> RESOURCE ALLOCATION
+        </div>
+        <div id="resourceTable" class="resource-table-wrap">
+          <div class="empty-state">Awaiting analysis…</div>
+        </div>
+
+        <div class="panel-header" style="margin-top:16px">
+          <span class="panel-icon">◈</span> ACTION TIMELINE
+        </div>
+        <div id="actionTimeline" class="timeline-wrap">
+          <div class="empty-state">Timeline generates after analysis</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANALYTICS TAB -->
+  <div id="tab-content-analytics" class="tab-pane">
+    <section class="dashboard-section">
+      <div class="dashboard-header">
+        <span class="panel-icon">◈</span> IMPACT ANALYTICS DASHBOARD
+      </div>
+
+      <div class="impact-metrics" id="impactMetrics" style="display:none">
+        <div class="metric-card red">
+          <div class="metric-val" id="mHigh">0</div>
+          <div class="metric-label">HIGH RISK WARDS</div>
+        </div>
+        <div class="metric-card orange">
+          <div class="metric-val" id="mPop">0</div>
+          <div class="metric-label">POPULATION AFFECTED</div>
+        </div>
+        <div class="metric-card yellow">
+          <div class="metric-val" id="mArea">0 km²</div>
+          <div class="metric-label">FLOOD AREA ESTIMATE</div>
+        </div>
+        <div class="metric-card blue">
+          <div class="metric-val" id="mPumps">0</div>
+          <div class="metric-label">PUMPS DEPLOYED</div>
+        </div>
+        <div class="metric-card teal">
+          <div class="metric-val" id="mTeams">0</div>
+          <div class="metric-label">RESCUE TEAMS</div>
+        </div>
+        <div class="metric-card purple">
+          <div class="metric-val" id="mDrains">0</div>
+          <div class="metric-label">DRAIN FAILURES</div>
+        </div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-title">FLOOD RISK DISTRIBUTION</div>
+          <div class="chart-wrap"><canvas id="pieChart"></canvas></div>
+        </div>
+        <div class="chart-card wide">
+          <div class="chart-title">WARD RISK LEVELS</div>
+          <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">RESOURCE ALLOCATION</div>
+          <div class="chart-wrap"><canvas id="resourceChart"></canvas></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- DIGITAL TWIN TAB -->
+  <div id="tab-content-twin" class="tab-pane">
+    <div class="twin-container">
+      <div class="panel-header">
+        <span class="panel-icon">⬡</span> DIGITAL TWIN — FLOOD TIMELINE SIMULATION
+      </div>
+      <div class="twin-content">
+        <div id="twinTimeline" class="twin-timeline">
+          <div class="empty-state">Run Digital Twin simulation to view flood timeline</div>
+        </div>
+        <div class="twin-progress-bar">
+          <div id="twinProgressFill" class="twin-progress-fill"></div>
+        </div>
+        <div class="twin-controls">
+          <button class="twin-play-btn" id="twinPlayBtn" onclick="playTwinAnimation()">▶ PLAY SIMULATION</button>
+          <button class="twin-play-btn secondary" onclick="resetTwin()">↻ RESET</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/script.js"></script>
+</body>
+</html>
